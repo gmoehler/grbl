@@ -21,10 +21,27 @@
 
 #include "grbl.h"
 
-
+#ifndef OFFLINE_CMD
 uint8_t serial_rx_buffer[RX_BUFFER_SIZE];
 uint8_t serial_rx_buffer_head = 0;
 volatile uint8_t serial_rx_buffer_tail = 0;
+#else
+uint8_t serial_rx_buffer[] = {
+"(DIAMOND, CIR, SQ TEST PROGRAM)"
+"(FEB-08-12, 12:05)"
+"( *** UNPROVEN PROGRAM *** )"
+"( RUN IN VISE ON PARALLELS )"
+"(Z OFFSET: TOP OF MATERIAL WITH )"
+"( 0.375\" MATERIAL ABOVE VISE JAWS )"
+"(X0,Y0,Z0= Center, Center, Top)"
+"(STOCK ORIGIN = X0. Y0. Z.01)"
+"(MATERIAL TYPE= ALUMINUM inch - 6061)"
+"(MATERIAL SIZE= X1.75 Y1.75 Z.5)"
+"(TOOL= 1/4 2-FLUTE HSS END MILL)"
+};
+int serial_rx_buffer_head = 0;
+int serial_rx_buffer_tail = 0;
+#endif
 
 uint8_t serial_tx_buffer[TX_BUFFER_SIZE];
 uint8_t serial_tx_buffer_head = 0;
@@ -34,7 +51,7 @@ volatile uint8_t serial_tx_buffer_tail = 0;
 #ifdef ENABLE_XONXOFF
   volatile uint8_t flow_ctrl = XON_SENT; // Flow control state variable
 #endif
-  
+
 
 // Returns the number of bytes used in the RX serial buffer.
 uint8_t serial_get_rx_buffer_count()
@@ -57,6 +74,7 @@ uint8_t serial_get_tx_buffer_count()
 
 void serial_init()
 {
+#ifndef OFFLINE_CMD
   // Set baud rate
   #if BAUD_RATE < 57600
     uint16_t UBRR0_value = ((F_CPU / (8L * BAUD_RATE)) - 1)/2 ;
@@ -76,12 +94,14 @@ void serial_init()
   UCSR0B |= 1<<RXCIE0;
 	  
   // defaults to 8-bit, no parity, 1 stop bit
+#endif
 }
 
 
 // Writes one byte to the TX serial buffer. Called by main program.
 // TODO: Check if we can speed this up for writing strings, rather than single bytes.
 void serial_write(uint8_t data) {
+#ifndef OFFLINE_CMD
   // Calculate next head
   uint8_t next_head = serial_tx_buffer_head + 1;
   if (next_head == TX_BUFFER_SIZE) { next_head = 0; }
@@ -95,12 +115,13 @@ void serial_write(uint8_t data) {
   // Store data and advance head
   serial_tx_buffer[serial_tx_buffer_head] = data;
   serial_tx_buffer_head = next_head;
-  
+
   // Enable Data Register Empty Interrupt to make sure tx-streaming is running
-  UCSR0B |=  (1 << UDRIE0); 
+  UCSR0B |=  (1 << UDRIE0);
+#endif
 }
 
-
+#ifndef OFFLINE_CMD
 // Data Register Empty Interrupt handler
 ISR(SERIAL_UDRE)
 {
@@ -129,11 +150,12 @@ ISR(SERIAL_UDRE)
   // Turn off Data Register Empty Interrupt to stop tx-streaming if this concludes the transfer
   if (tail == serial_tx_buffer_head) { UCSR0B &= ~(1 << UDRIE0); }
 }
-
+#endif
 
 // Fetches the first byte in the serial read buffer. Called by main program.
 uint8_t serial_read()
 {
+#ifndef OFFLINE_CMD
   uint8_t tail = serial_rx_buffer_tail; // Temporary serial_rx_buffer_tail (to optimize for volatile)
   if (serial_rx_buffer_head == tail) {
     return SERIAL_NO_DATA;
@@ -150,12 +172,21 @@ uint8_t serial_read()
         UCSR0B |=  (1 << UDRIE0); // Force TX
       }
     #endif
-    
     return data;
   }
+#else
+ if (serial_rx_buffer_head == serial_rx_buffer_tail) {
+  return SERIAL_NO_DATA;
+  } else {
+    uint8_t data = serial_rx_buffer[serial_rx_buffer_head];
+    serial_rx_buffer_head++;
+
+    return data;
+  }
+#endif
 }
 
-
+#ifndef OFFLINE_CMD
 ISR(SERIAL_RX)
 {
   uint8_t data = UDR0;
@@ -189,13 +220,18 @@ ISR(SERIAL_RX)
       //TODO: else alarm on overflow?
   }
 }
-
+#endif
 
 void serial_reset_read_buffer() 
 {
+#ifndef OFFLINE_CMD
   serial_rx_buffer_tail = serial_rx_buffer_head;
 
   #ifdef ENABLE_XONXOFF
     flow_ctrl = XON_SENT;
   #endif
+#else
+  serial_rx_buffer_head = 0;
+  serial_rx_buffer_tail= RX_BUFFER_SIZE-1;
+#endif
 }
