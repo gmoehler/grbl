@@ -39,6 +39,7 @@ uint8_t serial_rx_buffer[] = {
 "(MATERIAL SIZE= X1.75 Y1.75 Z.5)"
 "(TOOL= 1/4 2-FLUTE HSS END MILL)"
 };
+int RX_BUFFER_SIZE = sizeof(serial_rx_buffer) / sizeof(serial_rx_buffer[0]);
 int serial_rx_buffer_head = 0;
 int serial_rx_buffer_tail = 0;
 #endif
